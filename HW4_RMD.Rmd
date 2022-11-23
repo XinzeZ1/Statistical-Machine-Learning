@@ -1,0 +1,219 @@
+---
+title: "HW4"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## I
+
+```{r}
+library(ISLR)
+library(boot)
+boot.fn=function(data,index)
+  return(coef(lm(mpg~weight+horsepower+weight*horsepower,data=data,subset=index)))
+boot.fn(Auto,1:392)
+boot(Auto,boot.fn,1000)
+summary(lm(mpg~weight+horsepower+weight*horsepower,data=Auto))$coef
+```
+```{r}
+library(ISLR)
+library(boot)
+boot.fn=function(data,index)
+  return(coef(lm(log(mpg)~weight+horsepower+weight*horsepower,data=data,subset=index)))
+boot.fn(Auto,1:392)
+boot(Auto,boot.fn,1000)
+summary(lm(log(mpg)~weight+horsepower+weight*horsepower,data=Auto))$coef
+```
+
+
+
+## II
+
+```{r}
+library(ISLR)
+library(glmnet)
+library(gam)
+setwd('D:/workfiles/465/Data Folder/')
+load('Hitters2014a.dat')  
+load('Hitters2014b.dat') 
+```
+
+```{r}
+## Variable subset
+va = c('playerID','N','yearID','years','salary_plus1',
+      'Gcareer','HRcareer','SOcareer','BAVGcareer',
+       'R_Gcareer','G_Ycareer','R_Ycareer','RBI_Ycareer','HR_Ycareer',
+       'BAVG','G','AB','R','H','HR','RBI','BB','SO')
+
+## Train set
+dfHa = dfH2014a[,va]
+dfHa = na.omit(dfHa)
+#head(dfHa)
+
+## Test set
+dfHb = dfH2014b[,va]
+dfHb = na.omit(dfHb)
+#head(dfHb)
+
+##All - combined
+v1 = names(dfHa)
+v2 = names(dfHb)
+vx = intersect(v1,v2)
+dfHc = rbind(dfHa[,vx],dfHb[,vx])
+#head(dfHc)
+names(dfHc)
+
+c(nrow(dfHa),nrow(dfHb),nrow(dfHc))
+```
+
+```{r}
+## Base OLS model
+
+fml1 = log(salary_plus1) ~ log(years) +  G_Ycareer + BAVGcareer + RBI_Ycareer + SO +H
+model1 = lm(fml1,data=dfHa) 
+summary(model1)
+```
+
+```{r}
+# Compute in-sample RMSE, for base OLS model
+e = model1$residuals
+rss = sum(e^2)
+n = length(e)
+rmse1 = sqrt(rss/n)
+rmse1
+```
+
+
+
+
+```{r}
+fml2 = log(salary_plus1) ~ log(years) +  G_Ycareer + BAVGcareer + RBI_Ycareer + SO +H
+
+## Set up x and y matrices need for GLMNET
+y = log(dfHa$salary_plus1)  
+x = model.matrix(fml2,dfHa)[,-1] 
+
+## RIDGE -- alpha=1 and use grid of lambda values 
+grid = c(10, 5, 2, 1, .5)
+model2a = glmnet(x, y, alpha=0,lambda=grid)
+
+## Coefficient results for each lambda 
+print('GLMNET lambdas: ')
+print(model2a$lambda) 
+bridge = as.matrix(coef(model2a)) 
+print('RIDGE Coefficients:')
+bridge
+
+# Compute in-sample RMSE, for selected lambda 
+yp = predict(model2a,s=1,newx=x)
+e = y - yp 
+rss = sum(e^2)
+n = length(e)
+rmse2 = sqrt(rss/n)
+rmse2
+```
+
+
+
+
+```{r}
+## Generalized additive models (GAM)
+##  -- use LM and natural spline or the GAM procedure
+
+fml3a = log(salary_plus1) ~ ns(years,3) +  G_Ycareer + BAVGcareer + RBI_Ycareer + SO + H 
+model3a = lm(fml3a,data=dfHa) 
+summary(model3a)
+
+fml3b = log(salary_plus1) ~ s(years,3) +  G_Ycareer + BAVGcareer + RBI_Ycareer + SO + H 
+model3b = gam(fml3b,data=dfHa) 
+summary(model3b)
+
+## Compute in-sample RMSE, 
+##  for selected GAM type model model2a or model2b
+
+yp = predict(model3b)
+e = y - yp 
+rss = sum(e^2)
+n = length(e)
+rmse3b = sqrt(rss/n)
+rmse3b
+```
+
+```{r}
+## See variable effects -- linear and splines
+plot(model3b)
+
+##  Out-of-sample fit metrics
+##    RMSE (without k adjustment)  and R2
+
+yb = log(dfHb$salary_plus1)  
+
+## OLS
+ypb1 = predict(model1, newdata=dfHb)
+
+## Ridge
+xb = model.matrix(fml2,dfHb)[,-1] 
+ypb2 = predict(model2a,s=1,newx=xb)
+
+## GAM
+xb = model.matrix(fml2,dfHb)[,-1] 
+ypb3 = predict(model3b, newdata=dfHb)
+```
+
+```{r}
+##Pick one
+ypb = ypb1
+
+## Compute Test set error, rss and RMSE, R2 metrics
+e = yb - ypb 
+rss = sum(e^2)
+n = length(e)
+rmseb = sqrt(rss/n)
+R2b = 1-(rmseb/sd(yb))^2
+
+print('Test fit')
+c(rmseb, R2b, sd(yb), n)
+```
+
+```{r}
+##Pick one
+ypb = ypb2
+
+## Compute Test set error, rss and RMSE, R2 metrics
+e = yb - ypb 
+rss = sum(e^2)
+n = length(e)
+rmseb = sqrt(rss/n)
+R2b = 1-(rmseb/sd(yb))^2
+
+print('Test fit')
+c(rmseb, R2b, sd(yb), n)
+```
+
+```{r}
+##Pick one
+ypb = ypb3
+
+## Compute Test set error, rss and RMSE, R2 metrics
+e = yb - ypb 
+rss = sum(e^2)
+n = length(e)
+rmseb = sqrt(rss/n)
+R2b = 1-(rmseb/sd(yb))^2
+
+print('Test fit')
+c(rmseb, R2b, sd(yb), n)
+```
+
+
+```{r}
+boot.fn=function(data,index)
+  return(coef(lm(log(salary_plus1) ~ ns(years,3) +  G_Ycareer + BAVGcareer + RBI_Ycareer + SO + H,data=data,subset=index)))
+boot.fn(dfHa,1:200)
+boot(dfHa,boot.fn,1000)
+summary(lm(log(salary_plus1) ~ ns(years,3) +  G_Ycareer + BAVGcareer + RBI_Ycareer + SO + H,data=dfHa))$coef
+```
+

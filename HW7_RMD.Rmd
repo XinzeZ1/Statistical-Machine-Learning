@@ -1,0 +1,95 @@
+---
+title: "HW7"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r}
+## Exploring Neural Net (NN) estimation 
+##   M Boldin  Nov 2021
+setwd("D:/workfiles/465/")
+library(neuralnet)
+library(nnet)
+library(NeuralNetTools)
+```
+
+```{r}
+#par(mar=c(1,1,1,1))
+
+## Extras
+
+logistic <- function (x)  1/(1 + exp(-x))
+
+# Evaluate fits
+CalcRMSE <- function(model,y,data){
+    e = y - predict(model,newdata=data)
+    ss = sum(e^2)
+    rmse = sqrt(ss/n)
+    return(rmse)    
+}
+```
+
+
+```{r}
+## Test data from NeuralBetTools
+bcd = read.csv("dataR2.csv")
+View(bcd)
+dim(bcd)
+cor(bcd)
+```
+
+```{r}
+## Subset
+set.seed(123)
+n = 93
+train = sample(seq(1,nrow(bcd)),n)
+dfDat1 = bcd[train,]
+nrow(dfDat1)
+```
+
+```{r}
+fml1 = factor(Health_Condition) ~ BMI + Glucose + Insulin + HOMA + Leptin + Adiponectin + Resistin + MCP.1
+yv = 'Health_Condition'
+```
+
+```{r}
+## Note that different starting value sets and seeds may create different results
+set.seed(123)
+model=neuralnet(factor(Health_Condition) ~ BMI + Glucose + Insulin + HOMA + Leptin + Adiponectin + Resistin + MCP.1, data=dfDat1, hidden = 9, threshold = 0.01, act.fct = "logistic", err.fct = "sse", linear.output = FALSE)
+model1 = nnet(factor(Health_Condition) ~ BMI + Glucose + Insulin + HOMA + Leptin + Adiponectin + Resistin + MCP.1, data=dfDat1,size=9,range=0.1,decay=5e-2,maxit=5000)
+print(model)
+```
+
+```{r}
+a = model$net.result
+w = model$weights
+w
+
+yp = predict(model,newdata=dfDat1)
+
+rmse1 = CalcRMSE(model,dfDat1[,yv],dfDat1)
+rmse1
+```
+
+```{r}
+## Show structure, NN plot
+plotnet(model)
+garson(model)
+```
+
+```{r}
+yp1 = as.data.frame(model$net.result)
+yp1 = yp1[,1]
+ypick <- function (x) if(x < 0.50) '1' else '2'
+yp <- sapply(yp1,ypick)
+
+
+CM = table(dfDat1[,yv],yp)
+CM
+```
+

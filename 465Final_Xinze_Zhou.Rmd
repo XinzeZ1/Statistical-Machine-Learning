@@ -1,0 +1,191 @@
+---
+title: "Final"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ISLR)
+library(MASS)
+library(class)
+library(DescTools)
+library(gam)
+library(ggplot2)
+library(tree)
+library(neuralnet)
+library(nnet)
+library(NeuralNetTools)
+setwd("D:/workfiles/465/")
+```
+
+## Initial Parts
+
+### Logistics Regression
+
+```{r}
+## CREDIT data exploration and modeling code
+##   M Boldin Dec 2021  M365/S465 final exam data
+
+## Data Set 2:   Credit Approval as y variable (0,1 or YES/NO
+## 500 rows of data for creidt applications
+## Data columns:
+##  ID	
+##  Approved      	YES or NO for credit approval
+##  ApprovedDummy	  1 when Approved is YES
+##  Age	            Applicant age
+##  Debt            Debt currently owed  by applicant	(thousands)
+##  YearsEmployed   Years employed at current job
+##  PriorDefault	  1 if default on prior loan
+##  CreditScore	    Credit score, higher is better
+##  Income          Monhtly income (thousands)
+
+## This set:  NO YES 
+##           275 225 
+
+## Logit model results you should be able to match
+##
+
+#Call:
+#  glm(formula = fml, family = "binomial", data = dfC)
+
+#Deviance Residuals: 
+#  Min       1Q   Median       3Q      Max  
+#-2.6778  -0.3569  -0.2531   0.5446   2.6067  
+
+#Coefficients:
+#  Estimate Std. Error z value Pr(>|z|)    
+#(Intercept)    0.49380    0.45737   1.080  0.28030    
+#Age           -0.00577    0.01308  -0.441  0.65914    
+#Debt          -0.01393    0.02755  -0.506  0.61305    
+#YearsEmployed  0.09638    0.05451   1.768  0.07703 .  
+#PriorDefault  -3.72544    0.34657 -10.749  < 2e-16 ***
+#CreditScore    0.14165    0.04867   2.911  0.00361 ** 
+#Income         0.36067    0.11103   3.248  0.00116 ** 
+
+## Read data
+fn1 = 'Credit2c.csv'
+dfC = read.csv(fn1)
+dftest = read.csv("Credit2test.csv")
+
+## Check data
+names(dfC)
+dim(dfC)
+table(dfC['Approved'])
+summary(dfC)
+
+## Logistic Model 1
+fml = factor(Approved) ~ Age + Debt + YearsEmployed + + PriorDefault + CreditScore + Income       
+lm(fml,dfC)
+m1 = glm(fml,dfC,family='binomial')
+summary(m1)
+
+PseudoR2(m1)
+
+## To do  before exam
+##  * Find and interpret Psuedo-R2 for this model/case
+##      You can use DescTools::PseudoR2(m1)
+##  * Determine error rate, in sample
+##  * Try transformation of Age or drop as an explanatory variable
+##  *     and  Debt/(1+Income) or other transformations
+##             (1+Income) is needed because Income=0 is possible 
+##  * Categorize using another method: LDA, Tree, Neural Net
+##      and compare to logistic model
+
+##  In the exam you will be given a Holdout set to judge the accuracy
+##   below the code creates a pseudo-hold-out set for practice
+
+#xsample = sample(seq(1,500),30,replace=TRUE)
+#dfC2 = dfC[xsample,]
+yp = predict(m1,newdata=dftest,type='response')
+length(yp)
+yp
+
+contrasts(as.factor(dftest$Approved))
+glm.pred=rep("YES",152)
+glm.pred[yp >0.50]="NO"
+table(glm.pred,as.factor(dftest$Approved))
+```
+
+### LDA
+
+```{r}
+fml = factor(Approved) ~ Age + Debt + YearsEmployed + + PriorDefault + CreditScore + Income
+
+lda1 = lda(fml,data=dftest)
+lda1
+plot(lda1)
+
+## Evaluate predictions 
+pred1=predict(lda1,dftest)
+class=pred1$class
+table(class,as.factor(dftest$Approved))
+```
+
+### Tree
+
+```{r}
+# Classification Tree
+set.seed(123)
+tree1=tree(fml,data = dfC)
+summary(tree1)
+
+yn = "Approved"
+pred2 = predict(tree1,dfC,type="class")
+A = table(pred2,dfC[,yn])
+A
+
+
+plot(tree1)
+text(tree1,pretty=0)
+```
+
+### Neural Net
+
+```{r}
+#par(mar=c(1,1,1,1))
+
+## Extras
+
+logistic <- function (x)  1/(1 + exp(-x))
+
+# Evaluate fits
+CalcRMSE <- function(model,y,data){
+    e = y - predict(model,newdata=data)
+    ss = sum(e^2)
+    rmse = sqrt(ss/n)
+    return(rmse)    
+}
+```
+
+```{r}
+set.seed(123)
+model=neuralnet(factor(Approved) ~ Age + Debt + YearsEmployed + + PriorDefault + CreditScore + Income , data=dfC, hidden = 7, act.fct = "logistic", err.fct = "sse", linear.output = FALSE)
+print(model)
+```
+
+```{r}
+yp2 = predict(model,newdata=dftest)
+
+yp2 = yp2[,1]
+ypick <- function (x) if(x < 0.50) 'NO' else 'YES'
+yp <- sapply(yp2,ypick)
+yv = "Approved"
+
+CM = table(dftest[,yv],yp)
+CM
+```
+
+```{r}
+yp1 = as.data.frame(model$net.result)
+yp1 = yp1[,1]
+ypick <- function (x) if(x < 0.50) 'NO' else 'YES'
+yp <- sapply(yp1,ypick)
+yv = "Approved"
+
+CM = table(dfC[,yv],yp)
+CM
+```
+
